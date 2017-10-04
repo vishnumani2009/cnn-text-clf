@@ -18,7 +18,7 @@ Differences from original article:
 
 import numpy as np
 import datahelper
-from w2v import train_word2vec
+#from w2v import train_word2vec
 from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Flatten, Input, MaxPooling1D, Convolution1D, Embedding
 from keras.layers.merge import Concatenate
@@ -80,7 +80,7 @@ class CNN():
         
     def PoolBlock(self,size):
         model=self.model
-        model.add(MaxPooling1D(ppol_size=size)
+        model.add(MaxPooling1D(ppol_size=size))
 
     def FCBlock(self,size=10,lactivation="relu"):
         """
@@ -93,7 +93,7 @@ class CNN():
         model = self.model
         model.add(Dense(size, activation=lactivation))
        
-    def DropBlock(self,prob=0.5)
+    def DropBlock(self,prob=0.5):
         model = self.model
         model.add(Dropout(prob))
 
@@ -119,11 +119,11 @@ class CNN():
                 
         model=self.model=Sequential()
         model.add(Input(shape=(self.sequence_length,self.embedding_dim)))
-        self.DropBlock(self.dropout_prob[0]))
+        self.DropBlock(self.dropout_prob[0])
         for fz in self.filter_sizes:
             self.ConvBlock(num_filters=self.num_filters,kz=fz)
         self.PoolBlock(2)
-        self.DropBlock(self.dropout_prob[1]))
+        self.DropBlock(self.dropout_prob[1])
         self.FCBlock(self.hidden_dim,lactivation='relu')
         self.FCBlock(1,lactivation="sigmoid")
             
@@ -138,7 +138,7 @@ class CNN():
         self.model.fit(x_train, y_train, batch_size=self.batch_size, epochs=self.epochs,
           validation_data=(x_test, y_test), verbose=self.silent)
 
-    def predict(self,x_test)
+    def predict(self,x_test):
         pass
    
     def report(self,ytrue,ypred):
@@ -146,11 +146,11 @@ class CNN():
     
     def getdata(self,index="imdb"):
         if index=="imdb":
-            (x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=max_words, start_char=None,
+            (x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=self.max_words, start_char=None,
                                                               oov_char=None, index_from=None)
 
-            x_train = sequence.pad_sequences(x_train, maxlen=sequence_length, padding="post", truncating="post")
-            x_test = sequence.pad_sequences(x_test, maxlen=sequence_length, padding="post", truncating="post")
+            x_train = sequence.pad_sequences(x_train, maxlen=self.sequence_length, padding="post", truncating="post")
+            x_test = sequence.pad_sequences(x_test, maxlen=self.sequence_length, padding="post", truncating="post")
 
             vocabulary = imdb.get_word_index()
             vocabulary_inv = dict((v, k) for k, v in vocabulary.items())
@@ -161,11 +161,13 @@ class CNN():
         return x_train, y_train, x_test, y_test, vocabulary_inv
     
 def main():
-    x_train,y_train,x_test,y_test,vocabulary_inv=getdata()
+    
+    net=CNN()
+    x_train,y_train,x_test,y_test,vocabulary_inv=net.getdata()
     print("x_train shape:", x_train.shape)
     print("x_test shape:", x_test.shape)
     print("Vocabulary Size: {:d}".format(len(vocabulary_inv)))
-    
-    net=CNN()
     net.create()
     net.fit(x_train,y_train,x_test,y_test)
+
+main()
