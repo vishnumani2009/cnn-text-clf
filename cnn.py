@@ -16,53 +16,51 @@ Differences from original article:
 3. Added multiple dataset loaders
 """
 
-
-
-from __future__ import division, print_function
-import os, json
-from glob import glob
 import numpy as np
-from keras import backend as K
-from keras.layers.normalization import BatchNormalization
-from keras.utils.data_utils import get_file
-from keras.models import Sequential
-from keras.layers.core import Flatten, Dense, Dropout, Lambda
-from keras.layers.convolutional import Convolution2D, MaxPooling2D, ZeroPadding2D
-from keras.layers.pooling import GlobalAveragePooling2D
-from keras.optimizers import SGD, RMSprop, Adam
-from keras.preprocessing import image
-from keras import backend as K
-K.set_image_dim_ordering('th')
+import datahelper
+from w2v import train_word2vec
+from keras.models import Sequential, Model
+from keras.layers import Dense, Dropout, Flatten, Input, MaxPooling1D, Convolution1D, Embedding
+from keras.layers.merge import Concatenate
+from keras.datasets import imdb
+from keras.preprocessing import sequence
 
 
-
-
-class CNNTXT():
+class CNN():
     """
         The cnn text classifier model according to https://arxiv.org/abs/1408.5882 (CNN model for sentence classification
     """
 
-
-    def __init__(self,embedding_dim=50,filtersize=(3,8),num_filters=10,dropout_prob=(0.5,0.8),hidden_dim=50):
+    def __init__(self,embedding_dim=50,sequence_length=400,maxwords=5000,filtersize=(3,8),num_filters=10,dropout_prob=(0.5,0.8),hidden_dim=50,batch_size=10,epochs=1,verbose=1):
         self.DATAPATH="./data"
         self.embedding_dim=embedding_dim
         self.filtersize=filtersize
         self.num_filters=num_filters
         self.dropout_prob=dropout_prob
         self.hidden_dim=hidden_dim
-        self.create()
-        self.compile()
-
-
-    def EmbedBlock(self,embedsize=100):
-        pass
-
-    def predict(self,x_test):
-        pass
+        self.batch_size=batch_size
+        self.epoch=epochs
+        self.silent=verbose
+        self.Type=None
+        self.sequence_length=sequence_length
+        self.max_words=maxwords
         
-
-
-    def ConvBlock(self, layers, filters):
+        """
+        Put in main
+        self.create()
+        self.loaddata()
+        self.fit()
+        self.predict()
+        """
+    
+  
+    def EmbedBlock(self,embedsize=100):
+        if self.Type=='word2vec':
+            pass
+        elif self.Type=='glove':
+            pass
+        
+    def ConvBlock(self,num_filters,ks,pad="valid",activation="relu",stride=1):
         """
             Adds a specified number of ZeroPadding and Covolution layers
             to the model, and a MaxPooling layer at the very end.
@@ -74,32 +72,37 @@ class CNNTXT():
                                 created for each layer.
         """
         model = self.model
-        for i in range(layers):
-            model.add(ZeroPadding2D((1, 1)))
-            model.add(Convolution2D(filters, 3, 3, activation='relu'))
-        model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+        model.add(Convolution1D(filters=num_filters,kernel_size=ks,padding=pad,activation=activation,strides=stride))
+        
+    def FlatBlock(self):
+        model=self.model
+        model.add(Flatten())
+        
+    def PoolBlock(self,size):
+        model=self.model
+        model.add(MaxPooling1D(ppol_size=size)
 
-
-    def FCBlock(self):
+    def FCBlock(self,size=10,lactivation="relu"):
         """
-            Adds a fully connected layer of 4096 neurons to the model with a
-            Dropout of 0.5
+            Adds a fully connected layer  to the model with a specificied activiation
+            
 
-            Args:   None
+            Args:   size and activation of dense layers
             Returns:   None
         """
         model = self.model
-        model.add(Dense(4096, activation='relu'))
-        model.add(Dropout(0.5))
-
+        model.add(Dense(size, activation=lactivation))
+       
+    def DropBlock(self,prob=0.5)
+        model = self.model
+        model.add(Dropout(prob))
 
     def create(self):
         """
-            Creates the VGG16 network achitecture and loads the pretrained weights.
+            Creates the network achitecture
 
             Args:   None
             Returns:   None
-        """
         model = self.model = Sequential()
         self.EmbedBlock(embedsize=100)
         self.ConvBlock(2, 64)
@@ -112,40 +115,57 @@ class CNNTXT():
         self.FCBlock()
         self.FCBlock()
         model.add(Dense(1000, activation='softmax'))
-
-
-
-    def compile(self, lr=0.001):
+        """
+                
+        model=self.model=Sequential()
+        model.add(Input(shape=(self.sequence_length,self.embedding_dim)))
+        self.DropBlock(self.dropout_prob[0]))
+        for fz in self.filter_sizes:
+            self.ConvBlock(num_filters=self.num_filters,kz=fz)
+        self.PoolBlock(2)
+        self.DropBlock(self.dropout_prob[1]))
+        self.FCBlock(self.hidden_dim,lactivation='relu')
+        self.FCBlock(1,lactivation="sigmoid")
+            
+              
+    def fit(self, x_train,y_train,x_test,y_test,lr=0.001):
         """
             Configures the model for training.
             See Keras documentation: https://keras.io/models/model/
         """
-        self.model.compile(optimizer=Adam(lr=lr),
-                loss='categorical_crossentropy', metrics=['accuracy'])
+        self.model.compile(optimizer="adam",
+                loss='binary_crossentropy', metrics=['accuracy'])
+        self.model.fit(x_train, y_train, batch_size=self.batch_size, epochs=self.epochs,
+          validation_data=(x_test, y_test), verbose=self.silent)
 
+    def predict(self,x_test)
+        pass
+   
+    def report(self,ytrue,ypred):
+        pass
+    
+    def getdata(self,index="imdb"):
+        if index=="imdb":
+            (x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=max_words, start_char=None,
+                                                              oov_char=None, index_from=None)
 
-    def fit_data(self, trn, labels,  val, val_labels,  nb_epoch=1, batch_size=64):
-        """
-            Trains the model for a fixed number of epochs (iterations on a dataset).
-            See Keras documentation: https://keras.io/models/model/
-        add something like self.model.fit(trn, labels, nb_epoch=nb_epoch,
-                validation_data=(val, val_labels), batch_size=batch_size)
-        """
+            x_train = sequence.pad_sequences(x_train, maxlen=sequence_length, padding="post", truncating="post")
+            x_test = sequence.pad_sequences(x_test, maxlen=sequence_length, padding="post", truncating="post")
 
-
-    def test(self, path, batch_size=8):
-        """
-            Predicts the classes using the trained model on data yielded batch-by-batch.
-
-            Args:
-                path (string):  Path to the target directory. It should contain one subdirectory 
-                                per class.
-                batch_size (int): The number of images to be considered in each batch.
-            
-            Returns:
-                test_batches, numpy array(s) of predictions for the test_batches.
-
-            To do : Add test_batches = self.get_batches(path, shuffle=False, batch_size=batch_size, class_mode=None)
-            return test_batches, self.model.predict_generator(test_batches, test_batches.nb_sample)
-
-        """
+            vocabulary = imdb.get_word_index()
+            vocabulary_inv = dict((v, k) for k, v in vocabulary.items())
+            vocabulary_inv[0] = "<PAD/>"
+        else:
+            print("Non databases available for "+ index)
+        
+        return x_train, y_train, x_test, y_test, vocabulary_inv
+    
+def main():
+    x_train,y_train,x_test,y_test,vocabulary_inv=getdata()
+    print("x_train shape:", x_train.shape)
+    print("x_test shape:", x_test.shape)
+    print("Vocabulary Size: {:d}".format(len(vocabulary_inv)))
+    
+    net=CNN()
+    net.create()
+    net.fit(x_train,y_train,x_test,y_test)
