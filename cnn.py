@@ -31,7 +31,7 @@ class CNN():
         The cnn text classifier model according to https://arxiv.org/abs/1408.5882 (CNN model for sentence classification
     """
 
-    def __init__(self,embedding_dim=50,sequence_length=400,maxwords=5000,filtersize=(3,8),num_filters=10,dropout_prob=(0.5,0.8),hidden_dim=50,batch_size=10,epochs=1,verbose=1):
+    def __init__(self,embedding_dim=50,sequence_length=400,maxwords=5000,filtersize=(3,8),num_filters=10,dropout_prob=(0.5,0.8),hidden_dim=50,batch_size=10,epochs=1,verbose=1,mtype="CNN-static"):
         self.DATAPATH="./data"
         self.embedding_dim=embedding_dim
         self.filtersize=filtersize
@@ -44,21 +44,24 @@ class CNN():
         self.Type=None
         self.sequence_length=sequence_length
         self.max_words=maxwords
+        self.model_type=mtype
+        self.x_train, self.y_train, self.x_test, self.y_test, self.vocabulary_inv= None,None,None,None
         
-        """
-        Put in main
-        self.create()
-        self.loaddata()
-        self.fit()
-        self.predict()
-        """
-    
-  
-    def EmbedBlock(self,embedsize=100):
-        if self.Type=='word2vec':
-            pass
-        elif self.Type=='glove':
-            pass
+    def GenEmbedding(self):
+        if self.model_type in ["CNN-non-static", "CNN-static"]:
+                embedding_weights = train_word2vec(np.vstack((self.x_train, self.x_test)), self.vocabulary_inv, num_features=self.embedding_dim,
+                                                min_word_count=min_word_count, context=context)
+                if model_type == "CNN-static":
+                    self.x_train = np.stack([np.stack([embedding_weights[word] for word in sentence]) for sentence in self.x_train])
+                    self.x_test = np.stack([np.stack([embedding_weights[word] for word in sentence]) for sentence in self.x_test])
+                    print("x_train static shape:", self.x_train.shape)
+                    print("x_test static shape:", self.x_test.shape)
+
+        elif self.model_type == "CNN-rand":
+            embedding_weights = None
+        else:
+            raise ValueError("Unknown model type")
+        
         
     def ConvBlock(self,num_filters,ks,pad="valid",activation="relu",stride=1):
         """
@@ -72,7 +75,8 @@ class CNN():
                                 created for each layer.
         """
         model = self.model
-        model.add(Convolution1D(filters=num_filters,kernel_size=ks,padding=pad,activation=activation,strides=stride))
+        ishape=Input(shape=(self.sequence_length,self.embedding_dim))
+        model.add(Convolution1D(input_dim=ishape,filters=num_filters,kernel_size=ks,padding=pad,activation=activation,strides=stride))
         
     def FlatBlock(self):
         model=self.model
@@ -85,8 +89,6 @@ class CNN():
     def FCBlock(self,size=10,lactivation="relu"):
         """
             Adds a fully connected layer  to the model with a specificied activiation
-            
-
             Args:   size and activation of dense layers
             Returns:   None
         """
@@ -97,34 +99,44 @@ class CNN():
         model = self.model
         model.add(Dropout(prob))
 
+    def GraphBlocK(self):
+        graph_in = Input(shape=(sequence_length, embedding_dim))
+        convs = []
+        for fsz in self.filter_sizes:
+            conv = Convolution1D(nb_filter=self.num_filters,
+                                filter_length=fsz,
+                                border_mode='valid',
+                                activation='relu',
+                                subsample_length=1)(graph_in)
+            pool = MaxPooling1D(pool_length=2)(conv)
+            flatten = Flatten()(pool)
+            convs.append(flatten)
+
+        if len(filter_sizes)>1:
+            out = Merge(mode='concat')(convs)
+        else:
+            out = convs[0]
+        
+        gh=Model(input=graph_in,output=out)
+        self.model.add(gh)
+
+        
+
     def create(self):
         """
             Creates the network achitecture
-
             Args:   None
             Returns:   None
-        model = self.model = Sequential()
-        self.EmbedBlock(embedsize=100)
-        self.ConvBlock(2, 64)
-        self.ConvBlock(2, 128)
-        self.ConvBlock(3, 256)
-        self.ConvBlock(3, 512)
-        self.ConvBlock(3, 512)
-
-        model.add(Flatten())
-        self.FCBlock()
-        self.FCBlock()
-        model.add(Dense(1000, activation='softmax'))
+       
         """
                 
         model=self.model=Sequential()
-        model.add(Input(shape=(self.sequence_length,self.embedding_dim)))
+        self.model.add(Embedding(len(vocabulary), embedding_dim, input_length=sequence_length,
+                        weights=embedding_weights))
         self.DropBlock(self.dropout_prob[0])
-        for fz in self.filter_sizes:
-            self.ConvBlock(num_filters=self.num_filters,kz=fz)
-        self.PoolBlock(2)
-        self.DropBlock(self.dropout_prob[1])
+        self.GraphBlocK()
         self.FCBlock(self.hidden_dim,lactivation='relu')
+        self.DropBlock(self.dropout_prob[1])
         self.FCBlock(1,lactivation="sigmoid")
             
               
@@ -149,16 +161,16 @@ class CNN():
             (x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=self.max_words, start_char=None,
                                                               oov_char=None, index_from=None)
 
-            x_train = sequence.pad_sequences(x_train, maxlen=self.sequence_length, padding="post", truncating="post")
-            x_test = sequence.pad_sequences(x_test, maxlen=self.sequence_length, padding="post", truncating="post")
+            self.x_train = sequence.pad_sequences(x_train, maxlen=self.sequence_length, padding="post", truncating="post")
+            self.x_test = sequence.pad_sequences(x_test, maxlen=self.sequence_length, padding="post", truncating="post")
 
-            vocabulary = imdb.get_word_index()
-            vocabulary_inv = dict((v, k) for k, v in vocabulary.items())
-            vocabulary_inv[0] = "<PAD/>"
+            self.vocabulary = imdb.get_word_index()
+            self.vocabulary_inv = dict((v, k) for k, v in vocabulary.items())
+            self.vocabulary_inv[0] = "<PAD/>"
         else:
             print("Non databases available for "+ index)
         
-        return x_train, y_train, x_test, y_test, vocabulary_inv
+        return self.x_train, self.y_train, self.x_test, self.y_test, self.vocabulary_inv
     
 def main():
     
